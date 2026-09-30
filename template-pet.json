@@ -1,0 +1,8 @@
+{
+  "id": "my-custom-pet",
+  "displayName": "My Custom Pet",
+  "spriteVersionNumber": 2,
+  "spritesheetPath": "spritesheet.webp",
+  "name": "Custom Companion",
+  "description": "Custom companion pet compatible with OpenPets, Codex Pet v2, and FROAM."
+}

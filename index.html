@@ -1,0 +1,1314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solid Snake × Anime.js Tactical Showcase</title>
+  <script src="./anime.min.js"></script>
+  <style>
+    :root {
+      --soliton-green: #2bf078;
+      --soliton-dim: #0a3d1e;
+      --alert-red: #ff2a2a;
+      --codec-cyan: #0df0ff;
+      --bg-dark: #050c08;
+      --panel-bg: rgba(6, 20, 12, 0.88);
+      --border-green: rgba(43, 240, 120, 0.35);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg-dark);
+      color: #d8f5e2;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+
+    /* Soliton Grid & Scanlines */
+    .crt-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.3) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+      background-size: 100% 4px, 6px 100%;
+      z-index: 999;
+      opacity: 0.65;
+    }
+
+    header {
+      padding: 16px 24px;
+      background: var(--panel-bg);
+      border-b: 1px solid var(--border-green);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+      z-index: 10;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .radar-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 1.5px solid var(--soliton-green);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 10px rgba(43, 240, 120, 0.4);
+    }
+    .radar-sweep {
+      position: absolute;
+      inset: 2px;
+      border-radius: 50%;
+      border-top: 2px solid var(--soliton-green);
+      animation: radar-spin 2s linear infinite;
+    }
+    @keyframes radar-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    .brand-title {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--soliton-green);
+      text-shadow: 0 0 8px rgba(43, 240, 120, 0.5);
+    }
+    .brand-sub {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: #6dbf8b;
+      font-family: monospace;
+    }
+
+    .meta-pills {
+      display: flex;
+      gap: 8px;
+    }
+    .pill {
+      font-size: 10px;
+      font-family: monospace;
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border-green);
+      background: rgba(43, 240, 120, 0.08);
+      color: var(--soliton-green);
+    }
+
+    /* Main Stage */
+    #stage-container {
+      position: relative;
+      flex: 1;
+      height: 520px;
+      min-height: 520px;
+      margin: 16px;
+      border-radius: 12px;
+      border: 1px solid var(--border-green);
+      background: radial-gradient(circle at 50% 50%, #0a1f13 0%, #030805 100%);
+      overflow: hidden;
+      box-shadow: inset 0 0 80px rgba(0,0,0,0.8), 0 8px 32px rgba(0,0,0,0.5);
+      cursor: crosshair;
+    }
+
+    /* Radar Grid Overlay on Stage */
+    .stage-grid {
+      position: absolute;
+      inset: 0;
+      background-image: 
+        linear-gradient(var(--soliton-dim) 1px, transparent 1px),
+        linear-gradient(90deg, var(--soliton-dim) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: 0.35;
+      pointer-events: none;
+    }
+
+    /* SVG Path for Infiltration Route */
+    #patrol-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .patrol-line {
+      fill: none;
+      stroke: rgba(43, 240, 120, 0.4);
+      stroke-width: 2;
+      stroke-dasharray: 6 6;
+    }
+    .patrol-node {
+      fill: var(--soliton-green);
+      filter: drop-shadow(0 0 6px var(--soliton-green));
+    }
+
+    /* The Snake Actor Container (Anime.js Target) */
+    #snake-actor {
+      position: absolute;
+      width: 192px;
+      height: 208px;
+      left: 120px;
+      top: 220px;
+      z-index: 20;
+      transform-origin: bottom center;
+      will-change: transform, opacity;
+      pointer-events: none;
+    }
+
+    /* The Pixel Art Sprite Element (CSS Steps Animation) */
+    #snake-sprite {
+      width: 192px;
+      height: 208px;
+      background-image: url('./spritesheet.png');
+      background-repeat: no-repeat;
+      image-rendering: pixelated;
+      image-rendering: -moz-crisp-edges;
+      image-rendering: crisp-edges;
+      /* Default: Idle (Row 0) */
+      background-position: 0 0;
+      animation: sprite-walk 800ms steps(8) infinite;
+      will-change: background-position;
+    }
+
+    @keyframes sprite-walk {
+      from { background-position-x: 0px; }
+      to   { background-position-x: -1536px; }
+    }
+
+    /* Shadow underneath Snake */
+    #snake-shadow {
+      position: absolute;
+      bottom: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 72px;
+      height: 16px;
+      background: radial-gradient(ellipse at center, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0) 70%);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 15;
+    }
+
+    /* Metal Gear Alert "!" Box */
+    #alert-bubble {
+      position: absolute;
+      top: -24px;
+      left: 50%;
+      transform: translateX(-50%) scale(0);
+      width: 38px;
+      height: 48px;
+      background: #e60000;
+      border: 3px solid #ffffff;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 20px rgba(255, 0, 0, 0.8), inset 0 0 8px rgba(0,0,0,0.4);
+      z-index: 30;
+      pointer-events: none;
+      transform-origin: bottom center;
+    }
+    #alert-bubble::after {
+      content: '!';
+      color: #ffffff;
+      font-size: 34px;
+      font-weight: 900;
+      font-family: Impact, "Arial Black", sans-serif;
+      text-shadow: 2px 2px 0px #700000;
+      line-height: 1;
+    }
+
+    /* Cardboard Box Prop */
+    #cardboard-box {
+      position: absolute;
+      width: 140px;
+      height: 120px;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-500px) scale(0);
+      background: #b58348;
+      border: 3px solid #573a16;
+      border-radius: 6px;
+      box-shadow: inset 0 -6px 0 #7e5628, 0 8px 18px rgba(0,0,0,0.6);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 25;
+      pointer-events: none;
+      transform-origin: bottom center;
+    }
+    .box-tape {
+      width: 100%;
+      height: 14px;
+      background: #8b6235;
+      margin-bottom: 8px;
+      border-top: 1px solid #c89558;
+      border-bottom: 1px solid #4a3014;
+    }
+    .box-label {
+      font-family: monospace;
+      font-size: 11px;
+      font-weight: 900;
+      color: #4a3014;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border: 1.5px dashed #4a3014;
+      padding: 2px 6px;
+    }
+
+    /* Codec Radio Window */
+    #codec-window {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(140%) scale(0.9);
+      width: 90%;
+      max-width: 620px;
+      background: rgba(3, 15, 8, 0.95);
+      border: 2px solid var(--soliton-green);
+      box-shadow: 0 0 30px rgba(43, 240, 120, 0.35), inset 0 0 20px rgba(0, 30, 15, 0.8);
+      border-radius: 8px;
+      padding: 16px 20px;
+      z-index: 50;
+      pointer-events: auto;
+      display: flex;
+      gap: 18px;
+    }
+    .codec-portrait {
+      width: 72px;
+      height: 84px;
+      border: 2px solid var(--soliton-green);
+      background: #021a0c;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-shadow: inset 0 0 10px rgba(43, 240, 120, 0.3);
+      flex-shrink: 0;
+    }
+    .codec-freq {
+      font-family: monospace;
+      font-size: 12px;
+      font-weight: bold;
+      color: var(--codec-cyan);
+      margin-top: 4px;
+      text-shadow: 0 0 6px var(--codec-cyan);
+    }
+    .codec-dialogue {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .codec-speaker {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--soliton-green);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    .codec-text {
+      font-family: monospace;
+      font-size: 13px;
+      color: #eafff2;
+      line-height: 1.4;
+      margin: 6px 0;
+      min-height: 38px;
+    }
+    .codec-footer {
+      display: flex;
+      justify-content: flex-end;
+    }
+    .codec-close-btn {
+      background: rgba(43, 240, 120, 0.2);
+      border: 1px solid var(--soliton-green);
+      color: var(--soliton-green);
+      font-family: monospace;
+      font-size: 10px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    /* Particle Burst System */
+    .particle {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      background: var(--soliton-green);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 40;
+    }
+
+    /* Click Waypoint Marker */
+    .waypoint-ping {
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 2px solid var(--soliton-green);
+      transform: translate(-50%, -50%) scale(0);
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* Control Deck Panels */
+    .deck-container {
+      padding: 0 16px 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--panel-bg);
+      border: 1px solid var(--border-green);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    }
+
+    .panel-header {
+      font-size: 11px;
+      font-family: monospace;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--soliton-green);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .panel-header::before {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: var(--soliton-green);
+      box-shadow: 0 0 6px var(--soliton-green);
+    }
+
+    .button-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .tactical-btn {
+      background: rgba(10, 35, 18, 0.7);
+      border: 1px solid var(--border-green);
+      color: #eafff2;
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 3px;
+      transition: all 0.15s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .tactical-btn:hover {
+      background: rgba(43, 240, 120, 0.18);
+      border-color: var(--soliton-green);
+      box-shadow: 0 0 12px rgba(43, 240, 120, 0.35);
+      transform: translateY(-1px);
+    }
+    .tactical-btn:active {
+      transform: translateY(1px);
+    }
+    .btn-subtitle {
+      font-size: 9px;
+      font-family: monospace;
+      color: #79c996;
+      font-weight: normal;
+    }
+
+    .tactical-btn.alert-btn:hover {
+      background: rgba(255, 42, 42, 0.2);
+      border-color: var(--alert-red);
+      box-shadow: 0 0 14px rgba(255, 42, 42, 0.5);
+    }
+    .tactical-btn.alert-btn .btn-subtitle {
+      color: #ff9b9b;
+    }
+
+    /* Live Telemetry Display */
+    .telemetry-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(43, 240, 120, 0.12);
+      font-family: monospace;
+      font-size: 11px;
+    }
+    .telemetry-label { color: #7cb891; }
+    .telemetry-value { color: var(--soliton-green); font-weight: bold; }
+
+    /* Slider Rows */
+    .slider-row {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      font-family: monospace;
+      font-size: 10px;
+      color: #7cb891;
+    }
+    input[type=range] {
+      accent-color: var(--soliton-green);
+      cursor: pointer;
+    }
+
+    /* Quick Tip */
+    .hint-bar {
+      margin: 0 16px 16px;
+      padding: 8px 14px;
+      background: rgba(13, 240, 255, 0.08);
+      border: 1px solid rgba(13, 240, 255, 0.3);
+      border-radius: 6px;
+      font-size: 11px;
+      font-family: monospace;
+      color: var(--codec-cyan);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="crt-overlay"></div>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="radar-icon">
+        <div class="radar-sweep"></div>
+      </div>
+      <div>
+        <div class="brand-title">Anime Pet Starter Pack <span style="font-size: 11px; opacity: 0.8; color: var(--codec-cyan);">v0.1</span></div>
+        <div class="brand-sub">Tactical Companion Animation Engine • OpenPets / Codex Pet v2 / FROAM</div>
+      </div>
+    </div>
+    <div class="meta-pills">
+      <span class="pill" id="asset-pill">ASSET: solidsnake</span>
+      <span class="pill">CELL: 192×208px</span>
+      <label class="pill" style="cursor: pointer; background: rgba(43, 240, 120, 0.22); border-color: var(--soliton-green); font-weight: bold;" title="Drop in your own pet spritesheet (PNG or WEBP)">
+        <span>📁 Load Custom Pet</span>
+        <input type="file" id="pet-file-input" accept="image/png,image/webp" style="display:none;" onchange="loadCustomSpritesheet(this.files[0])">
+      </label>
+      <a href="https://github.com/VinceGuyMan/anime-pet-starter" target="_blank" class="pill" style="text-decoration:none; color:var(--codec-cyan); border-color:var(--codec-cyan);" title="View on GitHub">
+        <span>★ GitHub v0.1</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- Interactive Stage -->
+  <div id="stage-container">
+    <div class="stage-grid"></div>
+
+    <!-- SVG Infiltration Path -->
+    <svg id="patrol-svg">
+      <path id="patrol-path" class="patrol-line" d="M 120 220 Q 380 90 620 200 T 980 260 Q 750 440 450 360 Z" />
+      <circle cx="120" cy="220" r="4" class="patrol-node" />
+      <circle cx="620" cy="200" r="4" class="patrol-node" />
+      <circle cx="980" cy="260" r="4" class="patrol-node" />
+      <circle cx="450" cy="360" r="4" class="patrol-node" />
+    </svg>
+
+    <!-- Snake Actor (Anime.js Target) -->
+    <div id="snake-actor">
+      <!-- MGS Alert Exclamation Box -->
+      <div id="alert-bubble"></div>
+
+      <!-- Cardboard Box -->
+      <div id="cardboard-box">
+        <div class="box-tape"></div>
+        <div class="box-label">THE ORANGE</div>
+      </div>
+
+      <!-- Snake Sprite (CSS Steps Animation) -->
+      <div id="snake-sprite"></div>
+
+      <!-- Shadow -->
+      <div id="snake-shadow"></div>
+    </div>
+
+    <!-- Codec Radio Window -->
+    <div id="codec-window">
+      <div class="codec-portrait">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--soliton-green)" stroke-width="1.5">
+          <path d="M12 2a5 5 0 0 1 5 5v3a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5z"></path>
+          <path d="M19 10v1a7 7 0 0 1-14 0v-1"></path>
+          <line x1="12" y1="18" x2="12" y2="22"></line>
+        </svg>
+        <div class="codec-freq">140.85</div>
+      </div>
+      <div class="codec-dialogue">
+        <div>
+          <div class="codec-speaker" id="codec-speaker">Roy Campbell</div>
+          <div class="codec-text" id="codec-text">Snake, do you copy? You're testing the new Anime.js procedural pipeline.</div>
+        </div>
+        <div class="codec-footer">
+          <button class="codec-close-btn" onclick="dismissCodec()">DISMISS [SPACE]</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hint-bar">
+    <span>💡 <strong>PRO TIP:</strong> Click anywhere on the tactical grid above to navigate Snake directly using Anime.js spring physics, or trigger the tactical routines below!</span>
+  </div>
+
+  <!-- Control Deck Panels -->
+  <div class="deck-container">
+    <!-- Panel 1: Choreographed Timelines -->
+    <div class="panel">
+      <div class="panel-header">Choreographed Anime.js Timelines</div>
+      <div class="button-grid">
+        <button class="tactical-btn alert-btn" onclick="triggerAlertSequence()">
+          <span>❗ Alert Sequence</span>
+          <span class="btn-subtitle">Spring exclamation & impulse hop</span>
+        </button>
+
+        <button class="tactical-btn" onclick="triggerCardboardBox()">
+          <span>📦 Cardboard Infiltration</span>
+          <span class="btn-subtitle">Gravity drop, shuffle & spring peek</span>
+        </button>
+
+        <button class="tactical-btn" onclick="togglePatrol()">
+          <span id="patrol-btn-title">🎯 SVG Patrol Route</span>
+          <span class="btn-subtitle">anime.path() along Bezier curve</span>
+        </button>
+
+        <button class="tactical-btn" onclick="triggerCodecCall()">
+          <span>📻 Codec Incoming</span>
+          <span class="btn-subtitle">Radio ring & spring slide-in</span>
+        </button>
+
+        <button class="tactical-btn alert-btn" onclick="triggerCQCImpact()">
+          <span>💥 CQC Impact & Shake</span>
+          <span class="btn-subtitle">Screen impulse & particle burst</span>
+        </button>
+
+        <button class="tactical-btn" onclick="triggerStealthCamo()">
+          <span>🍃 Stealth Camo Pulse</span>
+          <span class="btn-subtitle">Sinusoidal optical refraction</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Panel 2: Secondary Physics & Juice -->
+    <div class="panel">
+      <div class="panel-header">Physics & Secondary Motion</div>
+      <div class="button-grid">
+        <button class="tactical-btn" onclick="triggerSquashLanding()">
+          <span>🦵 Squash & Stretch Hop</span>
+          <span class="btn-subtitle">Spring mass 1.0, stiffness 90</span>
+        </button>
+
+        <button class="tactical-btn" onclick="triggerScanningLook()">
+          <span>👀 360° Radar Scan</span>
+          <span class="btn-subtitle">Step cycling through rows 9-10</span>
+        </button>
+
+        <button class="tactical-btn" onclick="triggerTurboDash()">
+          <span>⚡ Turbo Dash</span>
+          <span class="btn-subtitle">Row 7 sprint with speed trail</span>
+        </button>
+
+        <button class="tactical-btn" onclick="resetSnakePosition()">
+          <span>🔄 Reset Coordinates</span>
+          <span class="btn-subtitle">Center stage & restore idle</span>
+        </button>
+      </div>
+
+      <div class="slider-row">
+        <div class="slider-header">
+          <span>SPRING STIFFNESS (TENSION)</span>
+          <span id="stiffness-val">80</span>
+        </div>
+        <input type="range" id="slider-stiffness" min="20" max="200" value="80" oninput="updateSpringConfig()">
+      </div>
+
+      <div class="slider-row">
+        <div class="slider-header">
+          <span>ANIMATION SPEED MULTIPLIER</span>
+          <span id="speed-val">1.0×</span>
+        </div>
+        <input type="range" id="slider-speed" min="0.2" max="2.5" step="0.1" value="1.0" oninput="updateSpeedMultiplier()">
+      </div>
+    </div>
+
+    <!-- Panel 3: Live Telemetry & Architecture -->
+    <div class="panel">
+      <div class="panel-header">Telemetry & Architecture</div>
+      <div class="telemetry-row">
+        <span class="telemetry-label">CURRENT ROW STATE:</span>
+        <span class="telemetry-value" id="telem-row">Row 0 (idle)</span>
+      </div>
+      <div class="telemetry-row">
+        <span class="telemetry-label">ACTOR COORDS (X, Y):</span>
+        <span class="telemetry-value" id="telem-coords">120px, 220px</span>
+      </div>
+      <div class="telemetry-row">
+        <span class="telemetry-label">ANIME.JS TIMELINE:</span>
+        <span class="telemetry-value" id="telem-timeline">IDLE</span>
+      </div>
+      <div class="telemetry-row">
+        <span class="telemetry-label">RENDER MODE:</span>
+        <span class="telemetry-value">CSS Steps (GPU) + Anime.js (Transforms)</span>
+      </div>
+      <div class="telemetry-row">
+        <span class="telemetry-label">SAFETY MARGINS:</span>
+        <span class="telemetry-value">PASS (≥ 15px all sides)</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* =========================================================================
+       1. SYNTHESIZED SOUND EFFECTS (Web Audio API)
+       ========================================================================= */
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playBeep(freq, type = 'sine', duration = 0.1, gainVal = 0.15) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      gain.gain.setValueAtTime(gainVal, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + duration);
+    }
+
+    // Iconic MGS Alert "!" sound synthesis
+    function sfxAlert() {
+      playBeep(1100, 'square', 0.18, 0.25);
+      setTimeout(() => playBeep(880, 'square', 0.25, 0.2), 60);
+    }
+
+    // Codec call ring chime
+    function sfxCodecRing() {
+      playBeep(1200, 'sine', 0.08, 0.15);
+      setTimeout(() => playBeep(1500, 'sine', 0.12, 0.15), 100);
+    }
+
+    // Heavy footstep / impact thud
+    function sfxThud() {
+      playBeep(90, 'triangle', 0.12, 0.35);
+    }
+
+    /* =========================================================================
+       2. SPRITE ENGINE & ROW CONTROLLER (Codex Pet v2 11-Row Specification)
+       ========================================================================= */
+    const ROWS = {
+      idle: 0,
+      'running-right': 1,
+      'running-left': 2,
+      waving: 3,
+      jumping: 4,
+      failed: 5,
+      waiting: 6,
+      running: 7,
+      review: 8,
+      'look-0-7': 9,
+      'look-8-15': 10
+    };
+
+    let currentState = 'idle';
+    let springStiffness = 80;
+    let speedMultiplier = 1.0;
+
+    const actor = document.getElementById('snake-actor');
+    const sprite = document.getElementById('snake-sprite');
+    const stage = document.getElementById('stage-container');
+    const alertBubble = document.getElementById('alert-bubble');
+    const cardboardBox = document.getElementById('cardboard-box');
+    const codecWindow = document.getElementById('codec-window');
+    const telemRow = document.getElementById('telem-row');
+    const telemCoords = document.getElementById('telem-coords');
+    const telemTimeline = document.getElementById('telem-timeline');
+
+    function setSpriteRow(stateName, durationMs = 800) {
+      if (!ROWS.hasOwnProperty(stateName)) return;
+      currentState = stateName;
+      const rowIndex = ROWS[stateName];
+      const yOffset = -(rowIndex * 208);
+      sprite.style.backgroundPositionY = `${yOffset}px`;
+      sprite.style.animationDuration = `${durationMs / speedMultiplier}ms`;
+      telemRow.textContent = `Row ${rowIndex} (${stateName})`;
+    }
+
+    // Initialize in Row 0
+    setSpriteRow('idle');
+
+    /* Telemetry coordinates tracker */
+    function updateCoordsDisplay() {
+      const rect = actor.getBoundingClientRect();
+      const stageRect = stage.getBoundingClientRect();
+      const x = Math.round(rect.left - stageRect.left);
+      const y = Math.round(rect.top - stageRect.top);
+      telemCoords.textContent = `${x}px, ${y}px`;
+      requestAnimationFrame(updateCoordsDisplay);
+    }
+    requestAnimationFrame(updateCoordsDisplay);
+
+    /* =========================================================================
+       3. ANIME.JS TIMELINES & PROCEDURAL ROUTINES
+       ========================================================================= */
+
+    let currentTimeline = null;
+    let isPatrolling = false;
+    let patrolAnim = null;
+
+    function reportTimeline(status) {
+      telemTimeline.textContent = status;
+    }
+
+    // --- ROUTINE 1: THE ICONIC MGS ALERT SEQUENCE ---
+    function triggerAlertSequence() {
+      if (currentTimeline) currentTimeline.pause();
+      reportTimeline('ALERT TIMELINE ACTIVE');
+      sfxAlert();
+
+      setSpriteRow('waiting'); // Initial freeze
+
+      currentTimeline = anime.timeline({
+        easing: 'easeOutElastic(1, .8)',
+        complete: () => {
+          setSpriteRow('idle');
+          reportTimeline('IDLE');
+        }
+      });
+
+      // 1. Alert "!" box pops up with spring elasticity
+      currentTimeline
+        .add({
+          targets: alertBubble,
+          scale: [0, 1.35],
+          rotate: [-18, 0],
+          opacity: [0, 1],
+          duration: 320,
+          easing: `spring(1, ${springStiffness}, 10, 0)`
+        })
+        // 2. Snake does startled vertical impulse hop
+        .add({
+          targets: actor,
+          translateY: '-=42',
+          duration: 220,
+          easing: 'easeOutQuad',
+          begin: () => setSpriteRow('jumping')
+        }, '-=240')
+        // 3. Fall back down and heavy squash-and-stretch landing
+        .add({
+          targets: actor,
+          translateY: '+=42',
+          duration: 260,
+          easing: 'easeInQuad',
+          complete: () => sfxThud()
+        })
+        .add({
+          targets: actor,
+          scaleX: 1.28,
+          scaleY: 0.72,
+          duration: 140,
+          easing: 'easeOutQuad'
+        })
+        .add({
+          targets: actor,
+          scaleX: 1.0,
+          scaleY: 1.0,
+          duration: 380,
+          easing: `spring(1, ${springStiffness}, 8, 0)`,
+          begin: () => setSpriteRow('running')
+        })
+        // 4. Quick directional 360 glance
+        .add({
+          targets: actor,
+          scaleX: -1.0, // Face left
+          duration: 280,
+          easing: 'steps(1)',
+          begin: () => setSpriteRow('look-8-15')
+        })
+        .add({
+          targets: actor,
+          scaleX: 1.0, // Face right
+          duration: 280,
+          easing: 'steps(1)',
+          begin: () => setSpriteRow('look-0-7')
+        })
+        // 5. Dismiss alert "!" bubble
+        .add({
+          targets: alertBubble,
+          scale: 0,
+          opacity: 0,
+          duration: 220,
+          easing: 'easeInBack'
+        });
+    }
+
+    // --- ROUTINE 2: CARDBOARD BOX INFILTRATION ---
+    function triggerCardboardBox() {
+      if (currentTimeline) currentTimeline.pause();
+      reportTimeline('CARDBOARD BOX TIMELINE');
+
+      setSpriteRow('waiting');
+
+      currentTimeline = anime.timeline({
+        complete: () => {
+          setSpriteRow('idle');
+          reportTimeline('IDLE');
+        }
+      });
+
+      // Box drops from ceiling with bounce
+      currentTimeline
+        .add({
+          targets: cardboardBox,
+          translateY: [-400, 0],
+          scale: [0.6, 1],
+          opacity: [0, 1],
+          duration: 650,
+          easing: 'easeOutBounce',
+          complete: () => sfxThud()
+        })
+        // Snake hides: sprite scale zeroes out
+        .add({
+          targets: sprite,
+          opacity: [1, 0],
+          scaleY: [1, 0.4],
+          duration: 180,
+          easing: 'easeInQuad'
+        }, '-=300')
+        // Box does stealth tiptoe shuffle
+        .add({
+          targets: cardboardBox,
+          translateX: ['-50%', 'calc(-50% + 40px)'],
+          rotate: [-4, 4, -4, 0],
+          duration: 800,
+          easing: 'easeInOutSine'
+        })
+        .add({
+          targets: cardboardBox,
+          translateX: ['calc(-50% + 40px)', '-50%'],
+          rotate: [4, -4, 4, 0],
+          duration: 800,
+          easing: 'easeInOutSine'
+        })
+        // Sudden lift/peek: box springs up
+        .add({
+          targets: cardboardBox,
+          translateY: [0, -75],
+          duration: 320,
+          easing: `spring(1, ${springStiffness}, 10, 0)`
+        })
+        // Snake pops back into view waving/saluting
+        .add({
+          targets: sprite,
+          opacity: [0, 1],
+          scaleY: [0.4, 1],
+          duration: 200,
+          begin: () => setSpriteRow('waving')
+        }, '-=250')
+        // Box flies away
+        .add({
+          targets: cardboardBox,
+          translateY: -500,
+          opacity: 0,
+          duration: 450,
+          easing: 'easeInBack'
+        }, '+=400');
+    }
+
+    // --- ROUTINE 3: SVG PATROL ROUTE (anime.path) ---
+    function togglePatrol() {
+      const btnTitle = document.getElementById('patrol-btn-title');
+      if (isPatrolling) {
+        if (patrolAnim) patrolAnim.pause();
+        isPatrolling = false;
+        btnTitle.textContent = '🎯 SVG Patrol Route';
+        setSpriteRow('idle');
+        reportTimeline('IDLE');
+        return;
+      }
+
+      isPatrolling = true;
+      btnTitle.textContent = '⏹️ Stop Patrol';
+      reportTimeline('PATROL PATH ACTIVE');
+      setSpriteRow('running');
+
+      const path = anime.path('#patrol-path');
+
+      patrolAnim = anime({
+        targets: actor,
+        translateX: path('x'),
+        translateY: path('y'),
+        easing: 'linear',
+        duration: 9000 / speedMultiplier,
+        loop: true,
+        update: function(anim) {
+          // Flip sprite depending on path tangent
+          const prog = anim.progress / 100;
+          if (prog > 0.35 && prog < 0.85) {
+            sprite.style.transform = 'scaleX(-1)';
+          } else {
+            sprite.style.transform = 'scaleX(1)';
+          }
+        }
+      });
+    }
+
+    // --- ROUTINE 4: CODEC RADIO CALL ---
+    function triggerCodecCall() {
+      reportTimeline('CODEC TRANSMISSION');
+      sfxCodecRing();
+      setSpriteRow('review'); // Snake checks transceiver / map
+
+      anime({
+        targets: codecWindow,
+        translateY: ['140%', '0%'],
+        scale: [0.85, 1],
+        opacity: [0, 1],
+        duration: 500,
+        easing: `spring(1, ${springStiffness}, 12, 0)`
+      });
+
+      // Typewriter dialogue
+      const dialogues = [
+        "Snake, Otacon here! The Anime.js integration provides smooth Bezier curve steering without losing your 16-bit pixel fidelity.",
+        "Colonel: Snake, remember your CQC training. Secondary spring physics give your companion weight when dropping from ledges.",
+        "Mei Ling: A journey of a thousand miles begins with a single step, Snake. Don't forget to save your progress!"
+      ];
+      const choice = dialogues[Math.floor(Math.random() * dialogues.length)];
+      document.getElementById('codec-text').textContent = choice;
+    }
+
+    function dismissCodec() {
+      anime({
+        targets: codecWindow,
+        translateY: '140%',
+        scale: 0.85,
+        opacity: 0,
+        duration: 350,
+        easing: 'easeInQuad',
+        complete: () => {
+          setSpriteRow('idle');
+          reportTimeline('IDLE');
+        }
+      });
+    }
+
+    // --- ROUTINE 5: CQC IMPACT & SCREEN SHAKE ---
+    function triggerCQCImpact() {
+      if (currentTimeline) currentTimeline.pause();
+      reportTimeline('CQC IMPACT TIMELINE');
+      sfxThud();
+
+      setSpriteRow('failed'); // Defeat pose
+
+      // Spawn radial particles
+      spawnParticles(actor.offsetLeft + 96, actor.offsetTop + 104);
+
+      // 1. Stage camera shake
+      anime({
+        targets: stage,
+        translateX: [0, -14, 14, -10, 10, -5, 5, 0],
+        translateY: [0, 10, -10, 7, -7, 3, -3, 0],
+        duration: 450,
+        easing: 'easeInOutSine'
+      });
+
+      // 2. Snake knockback & spring rebound
+      currentTimeline = anime.timeline({
+        complete: () => {
+          setTimeout(() => {
+            setSpriteRow('idle');
+            reportTimeline('IDLE');
+          }, 1200);
+        }
+      });
+
+      currentTimeline
+        .add({
+          targets: actor,
+          translateX: '-=60',
+          rotate: -20,
+          duration: 240,
+          easing: 'easeOutQuad'
+        })
+        .add({
+          targets: actor,
+          translateX: '+=20',
+          rotate: 0,
+          duration: 600,
+          easing: `spring(1, ${springStiffness}, 8, 0)`
+        });
+    }
+
+    function spawnParticles(cx, cy) {
+      const count = 16;
+      for (let i = 0; i < count; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        stage.appendChild(p);
+
+        const angle = (i / count) * 2 * Math.PI;
+        const dist = 60 + Math.random() * 50;
+        const tx = Math.cos(angle) * dist;
+        const ty = Math.sin(angle) * dist;
+
+        p.style.left = `${cx}px`;
+        p.style.top = `${cy}px`;
+
+        anime({
+          targets: p,
+          translateX: tx,
+          translateY: ty,
+          scale: [1.2, 0],
+          opacity: [1, 0],
+          duration: 500 + Math.random() * 300,
+          easing: 'easeOutExpo',
+          complete: () => p.remove()
+        });
+      }
+    }
+
+    // --- ROUTINE 6: STEALTH OPTICAL CAMO ---
+    let camoAnim = null;
+    function triggerStealthCamo() {
+      if (camoAnim) {
+        camoAnim.pause();
+        camoAnim = null;
+        actor.style.opacity = 1;
+        actor.style.filter = 'none';
+        reportTimeline('CAMO DEACTIVATED');
+        return;
+      }
+
+      reportTimeline('STEALTH CAMO ACTIVE');
+      playBeep(600, 'sine', 0.25, 0.2);
+
+      camoAnim = anime({
+        targets: actor,
+        opacity: [0.18, 0.75],
+        filter: ['blur(1.5px) hue-rotate(90deg)', 'blur(0px) hue-rotate(0deg)'],
+        direction: 'alternate',
+        loop: true,
+        duration: 1400,
+        easing: 'easeInOutSine'
+      });
+    }
+
+    // --- ROUTINE 7: PROCEDURAL SQUASH & STRETCH HOP ---
+    function triggerSquashLanding() {
+      reportTimeline('SQUASH & STRETCH');
+      setSpriteRow('jumping');
+
+      anime.timeline({
+        complete: () => setSpriteRow('idle')
+      })
+      .add({
+        targets: actor,
+        translateY: '-=50',
+        scaleX: 0.9,
+        scaleY: 1.15,
+        duration: 280,
+        easing: 'easeOutQuad'
+      })
+      .add({
+        targets: actor,
+        translateY: '+=50',
+        scaleX: 1.25,
+        scaleY: 0.78,
+        duration: 240,
+        easing: 'easeInQuad',
+        complete: () => sfxThud()
+      })
+      .add({
+        targets: actor,
+        scaleX: 1.0,
+        scaleY: 1.0,
+        duration: 400,
+        easing: `spring(1, ${springStiffness}, 9, 0)`
+      });
+    }
+
+    // --- ROUTINE 8: 360 RADAR LOOK SCAN ---
+    function triggerScanningLook() {
+      reportTimeline('360 LOOK SCAN');
+      const lookStates = ['look-0-7', 'look-8-15'];
+      let idx = 0;
+      setSpriteRow(lookStates[0], 400);
+
+      const lookInterval = setInterval(() => {
+        idx++;
+        if (idx < 4) {
+          setSpriteRow(lookStates[idx % 2], 400);
+        } else {
+          clearInterval(lookInterval);
+          setSpriteRow('idle');
+          reportTimeline('IDLE');
+        }
+      }, 400);
+    }
+
+    // --- ROUTINE 9: TURBO DASH ---
+    function triggerTurboDash() {
+      reportTimeline('TURBO DASH');
+      setSpriteRow('running', 400);
+
+      anime({
+        targets: actor,
+        translateX: '+=160',
+        duration: 500,
+        easing: 'easeOutExpo',
+        complete: () => {
+          setSpriteRow('idle');
+          reportTimeline('IDLE');
+        }
+      });
+    }
+
+    // --- ROUTINE 10: RESET POSITION ---
+    function resetSnakePosition() {
+      if (currentTimeline) currentTimeline.pause();
+      if (patrolAnim) { patrolAnim.pause(); isPatrolling = false; document.getElementById('patrol-btn-title').textContent = '🎯 SVG Patrol Route'; }
+      if (camoAnim) { camoAnim.pause(); camoAnim = null; actor.style.opacity = 1; actor.style.filter = 'none'; }
+
+      setSpriteRow('idle');
+      reportTimeline('RESETTING...');
+
+      anime({
+        targets: actor,
+        left: 120,
+        top: 220,
+        translateX: 0,
+        translateY: 0,
+        scaleX: 1,
+        scaleY: 1,
+        rotate: 0,
+        opacity: 1,
+        duration: 400,
+        easing: 'easeOutQuad',
+        complete: () => reportTimeline('IDLE')
+      });
+    }
+
+    /* =========================================================================
+       4. INTERACTIVE CLICK-TO-MOVE WAYPOINT WITH SPRING STEERING
+       ========================================================================= */
+    stage.addEventListener('click', (e) => {
+      // Don't intercept clicks inside Codec
+      if (codecWindow.contains(e.target)) return;
+
+      const rect = stage.getBoundingClientRect();
+      const targetX = e.clientX - rect.left - 96; // center anchor (192 / 2)
+      const targetY = e.clientY - rect.top - 180; // foot anchor (208 - 28)
+
+      // Spawn waypoint ping
+      const ping = document.createElement('div');
+      ping.className = 'waypoint-ping';
+      ping.style.left = `${e.clientX - rect.left}px`;
+      ping.style.top = `${e.clientY - rect.top}px`;
+      stage.appendChild(ping);
+
+      anime({
+        targets: ping,
+        scale: [0, 2.2],
+        opacity: [1, 0],
+        duration: 600,
+        easing: 'easeOutQuad',
+        complete: () => ping.remove()
+      });
+
+      // Determine run direction
+      const currentLeft = parseFloat(actor.style.left) || 120;
+      if (targetX < currentLeft) {
+        sprite.style.transform = 'scaleX(-1)';
+      } else {
+        sprite.style.transform = 'scaleX(1)';
+      }
+
+      setSpriteRow('running');
+      reportTimeline('SPRING STEERING TO WAYPOINT');
+
+      anime({
+        targets: actor,
+        left: targetX,
+        top: targetY,
+        duration: 1000 / speedMultiplier,
+        easing: `spring(1, ${springStiffness}, 12, 0)`,
+        complete: () => {
+          sprite.style.transform = 'scaleX(1)';
+          setSpriteRow('idle');
+          reportTimeline('IDLE');
+        }
+      });
+    });
+
+    /* Keyboard Shortcuts */
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        dismissCodec();
+      } else if (e.key === '1') {
+        triggerAlertSequence();
+      } else if (e.key === '2') {
+        triggerCardboardBox();
+      } else if (e.key === '3') {
+        togglePatrol();
+      } else if (e.key === '4') {
+        triggerCodecCall();
+      }
+    });
+
+    /* Sliders */
+    function updateSpringConfig() {
+      springStiffness = parseInt(document.getElementById('slider-stiffness').value);
+      document.getElementById('stiffness-val').textContent = springStiffness;
+    }
+
+    function updateSpeedMultiplier() {
+      speedMultiplier = parseFloat(document.getElementById('slider-speed').value);
+      document.getElementById('speed-val').textContent = `${speedMultiplier.toFixed(1)}×`;
+      setSpriteRow(currentState);
+    }
+
+    /* Custom Spritesheet Loader */
+    function loadCustomSpritesheet(file) {
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      sprite.style.backgroundImage = `url("${url}")`;
+      const cleanName = file.name.replace(/\.[^/.]+$/, '').slice(0, 18);
+      document.getElementById('asset-pill').textContent = `ASSET: ${cleanName}`;
+      playBeep(900, 'sine', 0.15, 0.2);
+    }
+  </script>
+</body>
+</html>
